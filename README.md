@@ -50,7 +50,7 @@ A fully playable Minesweeper game built in Unity, combining classic gameplay wit
 ⚙️ Customization
 
 Modify values in the GridManager.cs:
-
+```bash
 public int width = 10;
 public int height = 10;
 public int mineCount = 10;
