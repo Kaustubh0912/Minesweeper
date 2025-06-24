@@ -54,6 +54,7 @@ Modify values in the GridManager.cs:
 public int width = 10;
 public int height = 10;
 public int mineCount = 10;
+```
 
 Update flag or bomb icons by changing ToggleFlag() or RevealMine() in Cell.cs.
 
