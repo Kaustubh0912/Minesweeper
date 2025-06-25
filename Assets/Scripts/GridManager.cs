@@ -270,6 +270,8 @@ public class GridManager: MonoBehaviour
         }
 
         GenerateGrid();
+        timer = 0f;
+        timerRunning = true;
     }
     public bool IsGameEnded()
     {
