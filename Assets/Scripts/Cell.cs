@@ -1,59 +1,56 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEditor.Media;
+using UnityEngine.EventSystems;
 
-public class Cell : MonoBehaviour
+public class Cell : MonoBehaviour, IPointerClickHandler
 {
     public int x, y;
     public bool isMine;
     public bool isRevealed;
     public bool isFlagged;
-    public int adjacentMines;
+    public int neighborCount;
 
     public Button button;
     public TextMeshProUGUI cellText;
 
     public GridManager grid;
 
-    void Update()
-    {
-        if (grid.IsGameEnded()) return;
-
-        if (Input.GetMouseButtonDown(1)) 
-        {
-            Vector2 mousePos = Input.mousePosition;
-            RectTransform rt = GetComponent<RectTransform>();
-            if (RectTransformUtility.RectangleContainsScreenPoint(rt, mousePos))
-            {
-                ToggleFlag();
-            }
-        }
-    }
-
-    public void Init(int x , int y , GridManager grid)
+    public void Init(int x, int y, GridManager grid)
     {
         this.x = x;
         this.y = y;
         this.grid = grid;
         button = GetComponent<Button>();
-        button.onClick.AddListener(OnClick);
         cellText = GetComponentInChildren<TextMeshProUGUI>();
 
+        ResetCell();
+    }
+
+    private void ResetCell()
+    {
         isMine = false;
         isRevealed = false;
         isFlagged = false;
-        adjacentMines = 0;
+        neighborCount = 0;
         cellText.text = "";
         cellText.color = Color.black;
         button.interactable = true;
     }
 
-    void OnClick()
+    public void OnPointerClick(PointerEventData eventData)
     {
-        if (grid.IsGameEnded()) return;
+        if (grid.gameEnded) return; // prevent clicks after game ends
 
-        if (isFlagged||isRevealed) return;
+        if (eventData.button == PointerEventData.InputButton.Right)
+            ToggleFlag();
+        else if (eventData.button == PointerEventData.InputButton.Left)
+            HandleClick();
+    }
+
+    private void HandleClick()
+    {
+        if (isFlagged || isRevealed) return;
 
         if (isMine)
         {
@@ -63,48 +60,40 @@ public class Cell : MonoBehaviour
         else
         {
             Reveal();
-            grid.CheckWinCondition();
         }
     }
 
-    public void Reveal()
+    public void Reveal(bool recursive = true)
     {
         if (isRevealed) return;
 
         isRevealed = true;
         button.interactable = false;
 
-        if(adjacentMines>0)
+        if (isMine)
         {
-            cellText.text = adjacentMines.ToString();
-            cellText.color = GetNumberColor(adjacentMines);
-
+            RevealMine();
+        }
+        else if (neighborCount > 0)
+        {
+            SetNumber();
+            grid.OnCellRevealed();
         }
         else
         {
             cellText.text = "";
-            grid.RevealAdjacentCells(x, y);
-        }
+            grid.OnCellRevealed();
 
+            if (recursive)
+                RevealAdjacentCells();
+        }
     }
 
-    public void RevealWithoutRecursion()
+    private void SetNumber()
     {
-        if (isRevealed) return;
-
-        isRevealed = true;
-        button.interactable = false;
-
-        if (adjacentMines > 0)
-        {
-            cellText.text = adjacentMines.ToString();
-            cellText.color = GetNumberColor(adjacentMines);
-        }
-
-        else
-            cellText.text = "";
+        cellText.text = neighborCount.ToString();
+        cellText.color = GetNumberColor(neighborCount);
     }
-
 
     public void RevealMine()
     {
@@ -112,41 +101,53 @@ public class Cell : MonoBehaviour
         cellText.text = "💣";
         cellText.color = Color.red;
         button.interactable = false;
-
-        ColorBlock colors = button.colors;
-        colors.disabledColor = Color.red;
-        button.colors = colors;
     }
 
     public void ToggleFlag()
     {
-        if (isRevealed || grid.IsGameEnded()) return;
+        if (isRevealed) return;
 
         isFlagged = !isFlagged;
-
-        if (isFlagged)
-            grid.UpdateFlagCount(1);
-        else
-            grid.UpdateFlagCount(-1);
-
         cellText.text = isFlagged ? "🚩" : "";
         cellText.color = isFlagged ? Color.red : Color.black;
     }
 
-
-    Color GetNumberColor(int number)
+    private Color GetNumberColor(int number)
     {
         switch (number)
         {
             case 1: return Color.blue;
             case 2: return Color.green;
             case 3: return Color.red;
-            case 4: return new Color(0.5f, 0, 0.5f); // Purple
-            case 5: return new Color(0.5f, 0, 0); // Dark red
+            case 4: return new Color(0.5f, 0, 0.5f);
+            case 5: return new Color(0.5f, 0, 0);
             case 6: return Color.cyan;
             case 7: return Color.black;
             case 8: return Color.gray;
             default: return Color.black;
+        }
+    }
+
+    private void RevealAdjacentCells()
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0) continue;
+
+                int nx = x + dx;
+                int ny = y + dy;
+
+                if (grid.InBounds(nx, ny))
+                {
+                    Cell neighbor = grid.GetCell(nx, ny);
+                    if (!neighbor.isMine && !neighbor.isRevealed && !neighbor.isFlagged)
+                    {
+                        neighbor.Reveal(true);
+                    }
+                }
+            }
         }
     }
 }

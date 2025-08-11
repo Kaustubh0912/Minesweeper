@@ -170,12 +170,12 @@ MonoBehaviour:
   height: 10
   mineCount: 10
   cellPrefab: {fileID: 7436224532235291612, guid: be59c7ab9a20d354db9ea13b8f520110, type: 3}
-  gridPanel: {fileID: 2047432238}
   gameOverPanel: {fileID: 1910329932}
-  gameOverText: {fileID: 1329321065}
-  restartButton: {fileID: 876685218}
+  gridParent: {fileID: 2047432238}
   timerText: {fileID: 2031007498}
-  flagCountText: {fileID: 777472873}
+  resultText: {fileID: 1329321065}
+  restartButton: {fileID: 876685218}
+  gameEnded: 0
 --- !u!1 &138310546
 GameObject:
   m_ObjectHideFlags: 0

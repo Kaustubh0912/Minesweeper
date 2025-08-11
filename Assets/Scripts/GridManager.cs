@@ -1,87 +1,82 @@
-﻿using TMPro;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
-public class GridManager: MonoBehaviour
+public class GridManager : MonoBehaviour
 {
     public int width = 10;
     public int height = 10;
     public int mineCount = 10;
 
     public GameObject cellPrefab;
-    public Transform gridPanel;
-
-
     public GameObject gameOverPanel;
-    public TextMeshProUGUI gameOverText;
+    public Transform gridParent;
+    public TextMeshProUGUI timerText;
+    public TextMeshProUGUI resultText;
     public Button restartButton;
 
-    //Timer
-    public TextMeshProUGUI timerText;
-    private float timer = 0f;
-    private bool timerRunning = false;
-
-    //Flag
-    public TextMeshProUGUI flagCountText;
-    private int flagCount = 0;
-
-
     private Cell[,] cells;
-    private bool gameEnded = false;
+    public bool gameEnded;
+    private float timer;
+
+    private int revealedSafeCells;
+    private int totalSafeCells;
 
     void Start()
     {
-        timer = 0f;
-        timerRunning = true;
-
-        if (restartButton != null)
-            restartButton.onClick.AddListener(RestartGame);
+        restartButton.onClick.AddListener(RestartGame);
         GenerateGrid();
     }
 
-    private void Update()
+    void Update()
     {
-        if (timerRunning && !gameEnded)
+        if (!gameEnded)
         {
             timer += Time.deltaTime;
-            if (timerText != null)
-                timerText.text = $"Time: {Mathf.FloorToInt(timer)}s";
+            timerText.text = $"Time: {Mathf.FloorToInt(timer)}s";
         }
     }
 
     void GenerateGrid()
     {
-        gameEnded = false;
-
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(false);
-
+        // Clear old grid
+        foreach (Transform child in gridParent)
+            Destroy(child.gameObject);
 
         cells = new Cell[width, height];
+        revealedSafeCells = 0;
+        totalSafeCells = width * height - mineCount;
+        timer = 0f;
+        gameEnded = false;
+
+        gameOverPanel.SetActive(false);
+
+        // Create new grid
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                GameObject cellObject = Instantiate(cellPrefab, gridPanel);
-                cellObject.name = $"Cell {x} {y}";
-                Cell cell = cellObject.GetComponent<Cell>();
-                cell.Init(x, y,this);
+                GameObject cellObj = Instantiate(cellPrefab, gridParent);
+                Cell cell = cellObj.GetComponent<Cell>();
+                cell.Init(x, y, this);
                 cells[x, y] = cell;
             }
         }
-        flagCount = 0;
-        UpdateFlagCount(0);
+
         PlaceMines();
         CalculateNumbers();
+
+        resultText.text = "";
     }
 
     void PlaceMines()
     {
         int placedMines = 0;
-        while(placedMines<mineCount)
+        while (placedMines < mineCount)
         {
             int x = Random.Range(0, width);
             int y = Random.Range(0, height);
+
             if (!cells[x, y].isMine)
             {
                 cells[x, y].isMine = true;
@@ -90,164 +85,55 @@ public class GridManager: MonoBehaviour
         }
     }
 
-    void RevealAllMines()
-    {
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                Cell cell = cells[x, y];
-                if (cell.isMine && !cell.isRevealed)
-                {
-                    cell.RevealMine();
-                }
-                else if (!cell.isMine && cell.isFlagged)
-                {
-                    cell.cellText.text = "X"; 
-                    cell.cellText.color = Color.red;
-                }
-            }
-        }
-    }
-    void DisableAllCells()
-    {
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                cells[x,y].button.interactable = false;
-            }
-        }
-    }
-
     void CalculateNumbers()
     {
-        for ( int x=0; x<width;x++)
+        ForEachCell(cell =>
         {
-            for (int y = 0; y<height;y++)
+            if (cell.isMine) return;
+
+            int mineCountAround = 0;
+
+            for (int dx = -1; dx <= 1; dx++)
             {
-                if (cells[x,y].isMine) continue;
-
-                int count = 0;
-                for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
                 {
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        if (dx == 0 && dy == 0) continue;
-                        int nx = x + dx;
-                        int ny = y + dy;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height && cells[nx, ny].isMine)
-                        {
-                            count++;
-                        }
-                    }
-                }
-                cells[x,y].adjacentMines= count;
-            }
-        }
-    }
+                    if (dx == 0 && dy == 0) continue;
 
-    public void RevealAdjacentCells(int x, int y)
-    {
-        for (int dx = -1; dx <= 1; dx++)
-        {
-            for (int dy = -1; dy <= 1; dy++)
-            {
-                if (dx == 0 && dy == 0) continue; 
+                    int nx = cell.x + dx;
+                    int ny = cell.y + dy;
 
-                int nx = x + dx;
-                int ny = y + dy;
-
-                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-
-                Cell cell = cells[nx, ny];
-
-                if (cell.isRevealed || cell.isMine || cell.isFlagged) continue;
-
-                cell.RevealWithoutRecursion();
-
-                if (cell.adjacentMines == 0)
-                {
-                    RevealAdjacentCells(nx, ny);
+                    if (InBounds(nx, ny) && cells[nx, ny].isMine)
+                        mineCountAround++;
                 }
             }
-        }
+
+            cell.neighborCount = mineCountAround;
+        });
     }
 
-    public void CheckWinCondition()
+    public void OnCellRevealed()
     {
-        if (gameEnded) return;
-
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                Cell cell = cells[x, y];
-                if (!cell.isMine && !cell.isRevealed)
-                    return;
-            }
-        }
-
-        GameOver(true);
+        revealedSafeCells++;
+        if (revealedSafeCells == totalSafeCells)
+            GameOver(true);
     }
-
-    public void UpdateFlagCount(int delta)
-    {
-        flagCount += delta;
-        if (flagCountText != null)
-            flagCountText.text = $"Flags: {flagCount} / {mineCount}";
-    }
-
-
 
     public void GameOver(bool win)
     {
-        if (gameEnded) return;
+        gameOverPanel.SetActive(true);
 
-        timerRunning = false;
         gameEnded = true;
-
-        DisableAllCells();
-
-        if (win)
-        {
-            Debug.Log("🎉 CONGRATULATIONS! YOU WIN! 🎉");
-
-            
-            if (gameOverText != null)
-            {
-                gameOverText.text = "🎉 YOU WIN! 🎉\nAll mines found!";
-                gameOverText.color = Color.green;
-            }
-
-            RevealWinState();
-        }
-        else
-        {
-            Debug.Log("💥 BOOM! GAME OVER 💥");
-
-            if (gameOverText != null)
-            {
-                gameOverText.text = "💥 GAME OVER 💥\nYou hit a mine!";
-                gameOverText.color = Color.red;
-            }
-
-            RevealAllMines();
-        }
-
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(true);
+        RevealEndState(win);
+        resultText.text = win ? "You Win!" : "Game Over!";
     }
 
-
-    void RevealWinState()
+    void RevealEndState(bool win)
     {
-        for (int x = 0; x < width; x++)
+        ForEachCell(cell =>
         {
-            for (int y = 0; y < height; y++)
+            if (cell.isMine)
             {
-                Cell cell = cells[x, y];
-                if (cell.isMine)
+                if (win)
                 {
                     if (!cell.isFlagged)
                     {
@@ -259,23 +145,37 @@ public class GridManager: MonoBehaviour
                         cell.cellText.color = Color.green;
                     }
                 }
+                else
+                {
+                    if (!cell.isRevealed)
+                        cell.RevealMine();
+                }
             }
-        }
+            else if (!win && cell.isFlagged)
+            {
+                cell.cellText.text = "X";
+                cell.cellText.color = Color.red;
+            }
+        });
     }
-    public void RestartGame()
+    public Cell GetCell(int x, int y)
     {
-        foreach (Transform child in gridPanel)
-        {
-            Destroy(child.gameObject);
-        }
+        return cells[x, y];
+    }
 
+
+    public bool InBounds(int x, int y) =>
+        x >= 0 && y >= 0 && x < width && y < height;
+
+    void ForEachCell(System.Action<Cell> action)
+    {
+        for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+                action(cells[x, y]);
+    }
+
+    void RestartGame()
+    {
         GenerateGrid();
-        timer = 0f;
-        timerRunning = true;
     }
-    public bool IsGameEnded()
-    {
-        return gameEnded;
-    }
-
 }
